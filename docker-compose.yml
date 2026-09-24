@@ -1,0 +1,14 @@
+services:
+  html-workbench:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3200:3200"
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3200
+      DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
