@@ -32,6 +32,25 @@ docker compose up -d --build
 
 默认只允许 HTTPS 模型地址。需要接入本机模型时，在 `.env` 设置 `ALLOW_LOCAL_MODEL=true`，并使用本机地址。
 
+### us-38 部署
+
+- 访问地址：`https://zhili.opens.chat`。
+- 项目目录：`/opt/html-workbench`；历史数据库：`/opt/html-workbench/data/workbench.sqlite`。
+- Docker 仅绑定 `127.0.0.1:3200`，由宿主机 Nginx 提供 HTTPS 和 SSE 转发。
+- Nginx 配置：`/etc/nginx/sites-available/zhili.opens.chat`。
+- TLS 证书：`/etc/letsencrypt/live/zhili.opens.chat/`，由 Certbot 定时续期，续期后自动重载 Nginx。
+- 模型配置仍由每个浏览器保存，不随服务器部署或更新上传。
+
+在服务器更新：
+
+```sh
+cd /opt/html-workbench
+git pull --ff-only
+docker compose up -d --build
+```
+
+`data` 通过目录挂载持久化；更新时保留该目录和服务器 `.env`。
+
 ## 接口
 
 每个浏览器使用自己的模型配置，地址、Key、模型名称保存在该网站的 localStorage 中，不与其他浏览器共享。同一浏览器配置文件、同一网站地址下的标签页共用本地配置；换浏览器、换网站地址或清除网站数据后需要重新填写。

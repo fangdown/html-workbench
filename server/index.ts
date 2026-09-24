@@ -1,7 +1,7 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store } from './db.js';
 import { AppError } from './errors.js';
@@ -10,7 +10,7 @@ import { MAX_OUTPUT_BYTES, OUTPUT_CONSTRAINT, RUN_TIMEOUT_MS, type CreateRunInpu
 import { parseGenerationModel, publicModelSnapshot } from './modelInput.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const dataDir = process.env.DATA_DIR ? join(process.cwd(), process.env.DATA_DIR) : join(root, 'data');
+const dataDir = process.env.DATA_DIR ? resolve(process.cwd(), process.env.DATA_DIR) : join(root, 'data');
 mkdirSync(dataDir, { recursive: true });
 const store = new Store(join(dataDir, 'workbench.sqlite'));
 const app = Fastify({ logger: false, bodyLimit: 2 * 1024 * 1024 });
@@ -74,7 +74,7 @@ app.setErrorHandler((error, _request, reply) => {
 app.addHook('onSend', async (_request, reply) => {
   reply.header('X-Content-Type-Options', 'nosniff');
   reply.header('Referrer-Policy', 'no-referrer');
-  reply.header('Content-Security-Policy', "default-src 'self'; base-uri 'none'; frame-ancestors 'self'; object-src 'none'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'");
+  reply.header('Content-Security-Policy', "default-src 'self'; base-uri 'none'; frame-ancestors 'self'; object-src 'none'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'");
 });
 
 app.route({ method: ['GET', 'POST', 'PATCH', 'DELETE'], url: '/api/model-configs', handler: async () => fail(410, '模型配置仅保存在各自浏览器中。') });
