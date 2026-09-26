@@ -29,7 +29,7 @@ let noticeTimer: number | undefined;
 
 const configForm = ref<ModelInput>({ group: MODEL_GROUPS[0], baseUrl: 'https://api.opens.chat/v1', model: 'gpt-6-astra', protocol: 'responses', stream: true, isDefault: true, apiKey: '' });
 const selectedConfig = computed(() => configs.value.find(item => item.id === selectedConfigId.value) ?? configs.value[0]);
-const groupedConfigs = computed(() => MODEL_GROUPS.map(group => ({ group, configs: configs.value.filter(item => item.group === group) })).filter(item => item.configs.length));
+const groupedConfigs = computed(() => MODEL_GROUPS.map(group => ({ group, configs: configs.value.filter(item => item.group === group) })));
 const activeRun = computed(() => activeRunId.value ? details.value[activeRunId.value] : undefined);
 const isRunning = computed(() => activeRun.value?.status === 'running');
 
@@ -191,6 +191,16 @@ function editConfig(config?: ModelConfig) {
     : { group: nextGroup, baseUrl: 'https://api.opens.chat/v1', model: 'gpt-6-astra', protocol: 'responses', stream: true, isDefault: configs.value.length === 0, apiKey: '' };
   showSettings.value = true;
 }
+function selectModel(value: string) {
+  if (value.startsWith('new:')) {
+    const group = value.slice(4) as typeof MODEL_GROUPS[number];
+    selectedConfigId.value = '';
+    editConfig();
+    configForm.value.group = group;
+    return;
+  }
+  selectedConfigId.value = value;
+}
 function saveConfig() {
   savingConfig.value = true;
   try {
@@ -231,7 +241,7 @@ onUnmounted(() => { eventSource?.close(); window.clearTimeout(noticeTimer); wind
 <template>
   <div class="app-shell">
     <main class="content">
-      <section class="composer card"><div class="composer-grid"><div class="model-field"><div class="field-label"><label for="model">使用模型</label><button class="small-link" @click="editConfig()">管理模型 ↗</button></div><div class="model-select-row"><select id="model" v-model="selectedConfigId" :disabled="!configs.length"><option value="" disabled>{{ configs.length ? '选择模型' : '请先添加模型' }}</option><optgroup v-for="item in groupedConfigs" :key="item.group" :label="item.group"><option v-for="config in item.configs" :key="config.id" :value="config.id">{{ config.name }} · {{ config.model }}</option></optgroup></select><button class="select-settings" aria-label="编辑当前模型" @click="editConfig(selectedConfig)">⚙</button></div></div><div class="prompt-field"><div class="field-label"><label for="prompt">你的提示词</label><span class="prompt-hint">描述页面、风格和交互</span></div><textarea id="prompt" v-model="prompt" rows="3" placeholder="例如：做一个小火龙在导弹上骑自行车的 2D SVG 动画，要有云朵、火焰和可以暂停的按钮。"></textarea></div><div class="composer-action"><button v-if="isRunning" class="stop-button" @click="stopGeneration">■ 停止</button><button v-else class="primary-button" :disabled="loading || !selectedConfig" @click="startGeneration"><span>{{ loading ? '准备中…' : '开始生成' }}</span><b>↗</b></button></div></div></section>
+      <section class="composer card"><div class="composer-grid"><div class="model-field"><div class="field-label"><label for="model">使用模型</label><button class="small-link" @click="editConfig()">管理模型 ↗</button></div><div class="model-select-row"><select id="model" :value="selectedConfigId" @change="selectModel(($event.target as HTMLSelectElement).value)"><option value="" disabled>{{ configs.length ? '选择模型' : '请先添加模型' }}</option><optgroup v-for="item in groupedConfigs" :key="item.group" :label="item.group"><option v-for="config in item.configs" :key="config.id" :value="config.id">{{ config.group }} · {{ config.model }}</option><option v-if="!item.configs.length" :value="`new:${item.group}`">＋ 配置此分组</option></optgroup></select><button class="select-settings" aria-label="编辑当前模型" @click="editConfig(selectedConfig)">⚙</button></div></div><div class="prompt-field"><div class="field-label"><label for="prompt">你的提示词</label><span class="prompt-hint">描述页面、风格和交互</span></div><textarea id="prompt" v-model="prompt" rows="3" placeholder="例如：做一个小火龙在导弹上骑自行车的 2D SVG 动画，要有云朵、火焰和可以暂停的按钮。"></textarea></div><div class="composer-action"><button v-if="isRunning" class="stop-button" @click="stopGeneration">■ 停止</button><button v-else class="primary-button" :disabled="loading || !selectedConfig" @click="startGeneration"><span>{{ loading ? '准备中…' : '开始生成' }}</span><b>↗</b></button></div></div></section>
       <section class="gallery-section"><div class="gallery-heading"><div><h1>历史记录</h1></div><span class="gallery-count">{{ runs.length }} 个页面</span><button v-if="adminConfigured && !isAdmin" class="admin-button" @click="openAdminLogin">管理员登录</button><div v-else-if="isAdmin" class="admin-session"><span>管理员</span><button @click="logoutAdmin">退出</button></div><button class="refresh-button" @click="loadRunsOnly">刷新 ↻</button></div><div v-if="!runs.length" class="empty-gallery card"><div class="empty-icon">◎</div><h2>还没有生成记录</h2><p>完成第一次生成后，页面预览会出现在这里。</p></div><div v-else class="gallery-grid"><article v-for="run in runs" :key="run.id" class="preview-card" :class="{ selected: selectedCardId === run.id }" @click="openRun(run.id)"><div class="preview-frame"><HtmlPreview v-if="details[run.id]?.html" :html="details[run.id].html!" /><div v-else-if="run.status === 'running'" class="card-loading"><div class="loader"></div><span>正在生成…</span></div><div v-else class="card-failed"><span>◌</span><small>暂无可用预览</small></div><span class="status-ribbon" :class="statusClass(run.status)"><i></i>{{ statusLabel(run.status) }}</span></div><div class="card-info"><div class="card-title">{{ promptPreview(run.prompt) }}</div><div class="card-meta"><span>{{ run.snapshot.group }} · {{ run.snapshot.model }}</span><button v-if="isAdmin" class="delete-button" :disabled="run.status === 'running'" @click.stop="deleteRun(run.id)">删除</button></div><div class="card-time">{{ formatTime(run.createdAt) }}</div></div></article></div></section>
     </main>
     <div v-if="notice" class="toast" :class="`toast-${notice.type}`">{{ notice.text }}</div>
