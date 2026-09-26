@@ -16,6 +16,11 @@ const notice = ref<{ type: 'success' | 'error' | 'info'; text: string } | null>(
 const showSettings = ref(false);
 const editingId = ref<string | null>(null);
 const savingConfig = ref(false);
+const showAdminLogin = ref(false);
+const adminPassword = ref('');
+const adminConfigured = ref(false);
+const isAdmin = ref(false);
+const adminLoading = ref(false);
 const ownRun = ref<BrowserRun | null>(null);
 const ACTIVE_RUN_STORAGE_KEY = 'ai-zhili.active-run.v1';
 const LEGACY_ACTIVE_RUN_STORAGE_KEY = 'html-workbench.active-run.v1';
@@ -136,6 +141,47 @@ async function stopGeneration() {
     showNotice('已发送停止请求。', 'info');
   } catch (error: any) { showNotice(error.message, 'error'); }
 }
+async function loadAdminSession() {
+  const session = await api<{ configured: boolean; authenticated: boolean }>('/api/admin/session');
+  adminConfigured.value = session.configured;
+  isAdmin.value = session.authenticated;
+}
+function openAdminLogin() { adminPassword.value = ''; showAdminLogin.value = true; }
+function closeAdminLogin() { adminPassword.value = ''; showAdminLogin.value = false; }
+async function loginAdmin() {
+  if (!adminPassword.value || adminLoading.value) return;
+  adminLoading.value = true;
+  try {
+    await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ password: adminPassword.value }) });
+    adminPassword.value = '';
+    isAdmin.value = true;
+    closeAdminLogin();
+    showNotice('管理员登录成功。', 'success');
+  } catch (error: any) { showNotice(error.message, 'error'); }
+  finally { adminLoading.value = false; }
+}
+async function logoutAdmin() {
+  try {
+    await api('/api/admin/logout', { method: 'POST' });
+    isAdmin.value = false;
+    showNotice('已退出管理员。', 'info');
+  } catch (error: any) { showNotice(error.message, 'error'); }
+}
+async function deleteRun(id: string) {
+  const run = runs.value.find(item => item.id === id);
+  if (!run || run.status === 'running') return showNotice('生成中的记录不能删除。', 'error');
+  if (!window.confirm('确定删除这条历史记录？删除后无法恢复。')) return;
+  try {
+    await api(`/api/runs/${id}`, { method: 'DELETE' });
+    runs.value = runs.value.filter(item => item.id !== id);
+    delete details.value[id];
+    if (selectedCardId.value === id) selectedCardId.value = null;
+    showNotice('历史记录已删除。', 'success');
+  } catch (error: any) {
+    if (error.message === '请先登录管理员。') isAdmin.value = false;
+    showNotice(error.message, 'error');
+  }
+}
 function editConfig(config?: ModelConfig) { editingId.value = config?.id ?? null; configForm.value = config ? { name: config.name, baseUrl: config.baseUrl, model: config.model, protocol: config.protocol, stream: config.stream, isDefault: config.isDefault, apiKey: '' } : { name: '', baseUrl: 'https://api.opens.chat/v1', model: 'gpt-6-astra', protocol: 'responses', stream: true, isDefault: configs.value.length === 0, apiKey: '' }; showSettings.value = true; }
 function saveConfig() {
   savingConfig.value = true;
@@ -167,6 +213,7 @@ onMounted(async () => {
   window.addEventListener('storage', syncLocalModels);
   try { loadConfigs(); } catch (error: any) { showNotice(error.message, 'error'); }
   restoreOwnRun();
+  try { await loadAdminSession(); } catch (error: any) { showNotice(error.message, 'error'); }
   try { await loadRuns(); } catch (error: any) { showNotice(error.message, 'error'); }
 });
 onUnmounted(() => { eventSource?.close(); window.clearTimeout(noticeTimer); window.removeEventListener('storage', syncLocalModels); });
@@ -176,9 +223,10 @@ onUnmounted(() => { eventSource?.close(); window.clearTimeout(noticeTimer); wind
   <div class="app-shell">
     <main class="content">
       <section class="composer card"><div class="composer-grid"><div class="model-field"><div class="field-label"><label for="model">使用模型</label><button class="small-link" @click="editConfig()">管理模型 ↗</button></div><div class="model-select-row"><select id="model" v-model="selectedConfigId" :disabled="!configs.length"><option value="" disabled>{{ configs.length ? '选择模型' : '请先添加模型' }}</option><option v-for="config in configs" :key="config.id" :value="config.id">{{ config.name }} · {{ config.model }}</option></select><button class="select-settings" aria-label="编辑当前模型" @click="editConfig(selectedConfig)">⚙</button></div></div><div class="prompt-field"><div class="field-label"><label for="prompt">你的提示词</label><span class="prompt-hint">描述页面、风格和交互</span></div><textarea id="prompt" v-model="prompt" rows="3" placeholder="例如：做一个小火龙在导弹上骑自行车的 2D SVG 动画，要有云朵、火焰和可以暂停的按钮。"></textarea></div><div class="composer-action"><button v-if="isRunning" class="stop-button" @click="stopGeneration">■ 停止</button><button v-else class="primary-button" :disabled="loading || !selectedConfig" @click="startGeneration"><span>{{ loading ? '准备中…' : '开始生成' }}</span><b>↗</b></button></div></div></section>
-      <section class="gallery-section"><div class="gallery-heading"><div><h1>历史记录</h1></div><span class="gallery-count">{{ runs.length }} 个页面</span><button class="refresh-button" @click="loadRunsOnly">刷新 ↻</button></div><div v-if="!runs.length" class="empty-gallery card"><div class="empty-icon">◎</div><h2>还没有生成记录</h2><p>完成第一次生成后，页面预览会出现在这里。</p></div><div v-else class="gallery-grid"><article v-for="run in runs" :key="run.id" class="preview-card" :class="{ selected: selectedCardId === run.id }" @click="openRun(run.id)"><div class="preview-frame"><HtmlPreview v-if="details[run.id]?.html" :html="details[run.id].html!" /><div v-else-if="run.status === 'running'" class="card-loading"><div class="loader"></div><span>正在生成…</span></div><div v-else class="card-failed"><span>◌</span><small>暂无可用预览</small></div><span class="status-ribbon" :class="statusClass(run.status)"><i></i>{{ statusLabel(run.status) }}</span></div><div class="card-info"><div class="card-title">{{ promptPreview(run.prompt) }}</div><div class="card-meta"><span>{{ run.snapshot.model }}</span></div><div class="card-time">{{ formatTime(run.createdAt) }}</div></div></article></div></section>
+      <section class="gallery-section"><div class="gallery-heading"><div><h1>历史记录</h1></div><span class="gallery-count">{{ runs.length }} 个页面</span><button v-if="adminConfigured && !isAdmin" class="admin-button" @click="openAdminLogin">管理员登录</button><div v-else-if="isAdmin" class="admin-session"><span>管理员</span><button @click="logoutAdmin">退出</button></div><button class="refresh-button" @click="loadRunsOnly">刷新 ↻</button></div><div v-if="!runs.length" class="empty-gallery card"><div class="empty-icon">◎</div><h2>还没有生成记录</h2><p>完成第一次生成后，页面预览会出现在这里。</p></div><div v-else class="gallery-grid"><article v-for="run in runs" :key="run.id" class="preview-card" :class="{ selected: selectedCardId === run.id }" @click="openRun(run.id)"><div class="preview-frame"><HtmlPreview v-if="details[run.id]?.html" :html="details[run.id].html!" /><div v-else-if="run.status === 'running'" class="card-loading"><div class="loader"></div><span>正在生成…</span></div><div v-else class="card-failed"><span>◌</span><small>暂无可用预览</small></div><span class="status-ribbon" :class="statusClass(run.status)"><i></i>{{ statusLabel(run.status) }}</span></div><div class="card-info"><div class="card-title">{{ promptPreview(run.prompt) }}</div><div class="card-meta"><span>{{ run.snapshot.model }}</span><button v-if="isAdmin" class="delete-button" :disabled="run.status === 'running'" @click.stop="deleteRun(run.id)">删除</button></div><div class="card-time">{{ formatTime(run.createdAt) }}</div></div></article></div></section>
     </main>
     <div v-if="notice" class="toast" :class="`toast-${notice.type}`">{{ notice.text }}</div>
     <div v-if="showSettings" class="modal-backdrop"><section class="settings-modal card"><div class="modal-heading"><div><span class="eyebrow">仅保存在当前浏览器 · 不共享</span><h2>{{ editingId ? '编辑模型' : '添加模型' }}</h2></div><button class="modal-close" @click="showSettings = false">×</button></div><div class="settings-form"><label>配置名称<input v-model="configForm.name" placeholder="例如：OpenAI 主账号" /></label><label>Base URL<input v-model="configForm.baseUrl" placeholder="https://api.opens.chat/v1" /></label><label>模型名称<input v-model="configForm.model" placeholder="gpt-6-astra" /></label><label>API Key <small v-if="editingId">留空以保留当前 Key</small><input v-model="configForm.apiKey" type="password" autocomplete="new-password" placeholder="不会回显已保存的 Key" /></label><label>接口协议<select v-model="configForm.protocol"><option value="chat-completions">Chat Completions</option><option value="responses">Responses</option></select></label><div class="toggle-row"><label class="check-label"><input v-model="configForm.stream" type="checkbox" /> 流式输出</label><label class="check-label"><input v-model="configForm.isDefault" type="checkbox" /> 设为默认模型</label></div></div><div class="modal-footer"><p class="local-config-note">地址、Key 和模型配置仅保存在当前浏览器；生成时临时发送至后端调用，作品保存在服务器并共享。换浏览器或清除网站数据后需重新配置。</p><div class="config-list"><div v-for="config in configs" :key="config.id" class="config-line"><span>{{ config.name }} <small>{{ config.hasKey ? config.keyMask : 'Key 不可用' }}</small></span><span><button @click="editConfig(config)">编辑</button><button @click="removeConfig(config)">删除</button></span></div></div><div class="modal-actions"><button class="outline-button" @click="showSettings = false">取消</button><button class="primary-button" :disabled="savingConfig" @click="saveConfig">{{ savingConfig ? '保存中…' : '保存配置' }} <b>↗</b></button></div></div></section></div>
+    <div v-if="showAdminLogin" class="modal-backdrop"><section class="admin-modal card"><div class="modal-heading"><div><span class="eyebrow">ADMIN ACCESS</span><h2>管理员登录</h2></div><button class="modal-close" @click="closeAdminLogin">×</button></div><form class="admin-form" @submit.prevent="loginAdmin"><label for="admin-password">管理员密码</label><input id="admin-password" v-model="adminPassword" type="password" autocomplete="current-password" autofocus placeholder="输入服务器管理员密码" /><p>登录状态仅通过安全 Cookie 保存在当前浏览器。</p><div class="admin-modal-actions"><button type="button" class="outline-button" @click="closeAdminLogin">取消</button><button type="submit" class="primary-button" :disabled="adminLoading || !adminPassword">{{ adminLoading ? '登录中…' : '登录' }}</button></div></form></section></div>
   </div>
 </template>

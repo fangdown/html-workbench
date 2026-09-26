@@ -102,7 +102,7 @@ export class Store {
   }
 
   deleteRun(id: string) {
-    this.db.prepare("DELETE FROM runs WHERE id = ? AND status != 'running'").run(id);
+    return this.db.prepare("DELETE FROM runs WHERE id = ? AND status != 'running'").run(id).changes > 0;
   }
 
   private toRun(row: DbRow, detail: true): RunDetail;

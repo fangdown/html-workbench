@@ -8,13 +8,20 @@ import { AppError } from './errors.js';
 import { generate } from './provider.js';
 import { MAX_OUTPUT_BYTES, OUTPUT_CONSTRAINT, RUN_TIMEOUT_MS, type CreateRunInput, type GenerationModel } from '../shared/types.js';
 import { parseGenerationModel, publicModelSnapshot } from './modelInput.js';
+import { createAdminAuth } from './adminAuth.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const dataDir = process.env.DATA_DIR ? resolve(process.cwd(), process.env.DATA_DIR) : join(root, 'data');
 mkdirSync(dataDir, { recursive: true });
 const store = new Store(join(dataDir, 'workbench.sqlite'));
-const app = Fastify({ logger: false, bodyLimit: 2 * 1024 * 1024 });
+const app = Fastify({ logger: false, bodyLimit: 2 * 1024 * 1024, trustProxy: (_address, hop) => hop === 0 });
 const tasks = new Map<string, { controller: AbortController; subscribers: Set<(event: string, data: unknown) => void> }>();
+const adminAuth = createAdminAuth({
+  passwordHash: process.env.ADMIN_PASSWORD_HASH,
+  sessionSecret: process.env.APP_KEY,
+  secure: process.env.NODE_ENV === 'production',
+});
+const adminLoginAttempts = new Map<string, { count: number; resetAt: number }>();
 
 function fail(statusCode: number, message: string): never { throw new AppError(statusCode, message); }
 function requireString(value: unknown, label: string, max = 100_000) {
@@ -30,6 +37,26 @@ function extractHtml(output: string) {
 function validHtml(value: string) { return /<!doctype\s+html/i.test(value) && /<html[\s>]/i.test(value) && /<body[\s>]/i.test(value); }
 function publish(taskId: string, event: string, data: unknown) { tasks.get(taskId)?.subscribers.forEach(send => send(event, data)); }
 function finishTask(taskId: string) { const task = tasks.get(taskId); if (!task) return; task.subscribers.forEach(send => send('close', {})); task.subscribers.clear(); }
+function requireSameOrigin(request: FastifyRequest) {
+  const origin = request.headers.origin;
+  const protocol = String(request.headers['x-forwarded-proto'] ?? 'http').split(',')[0].trim();
+  const expected = (process.env.PUBLIC_ORIGIN?.trim().replace(/\/$/, '') || `${protocol}://${request.headers.host}`);
+  if (!origin || origin !== expected) fail(403, '请求来源无效。');
+}
+function requireAdmin(request: FastifyRequest) {
+  if (!adminAuth.isAuthenticated(request.headers.cookie)) fail(401, '请先登录管理员。');
+}
+function checkAdminLoginLimit(ip: string) {
+  const now = Date.now();
+  const entry = adminLoginAttempts.get(ip);
+  if (entry && entry.resetAt > now && entry.count >= 5) fail(429, '登录失败次数过多，请 15 分钟后重试。');
+  if (entry && entry.resetAt <= now) adminLoginAttempts.delete(ip);
+}
+function recordAdminLoginFailure(ip: string) {
+  const now = Date.now();
+  const entry = adminLoginAttempts.get(ip);
+  adminLoginAttempts.set(ip, entry && entry.resetAt > now ? { ...entry, count: entry.count + 1 } : { count: 1, resetAt: now + 15 * 60 * 1000 });
+}
 
 async function runTask(runId: string, modelConfig: GenerationModel) {
   const run = store.getRun(runId);
@@ -80,6 +107,29 @@ app.addHook('onSend', async (_request, reply) => {
 app.route({ method: ['GET', 'POST', 'PATCH', 'DELETE'], url: '/api/model-configs', handler: async () => fail(410, '模型配置仅保存在各自浏览器中。') });
 app.route({ method: ['GET', 'POST', 'PATCH', 'DELETE'], url: '/api/model-configs/:id', handler: async () => fail(410, '模型配置仅保存在各自浏览器中。') });
 
+app.get('/api/admin/session', async (request, reply) => {
+  reply.header('Cache-Control', 'no-store');
+  return { configured: adminAuth.configured, authenticated: adminAuth.isAuthenticated(request.headers.cookie) };
+});
+app.post('/api/admin/login', async (request, reply) => {
+  requireSameOrigin(request);
+  if (!adminAuth.configured) fail(503, '管理员功能尚未配置。');
+  checkAdminLoginLimit(request.ip);
+  const password = requireString((request.body as { password?: unknown } | null)?.password, '管理员密码', 200);
+  if (!adminAuth.verifyPassword(password)) {
+    recordAdminLoginFailure(request.ip);
+    fail(401, '管理员密码错误。');
+  }
+  adminLoginAttempts.delete(request.ip);
+  reply.header('Set-Cookie', adminAuth.createSessionCookie());
+  return { authenticated: true };
+});
+app.post('/api/admin/logout', async (request, reply) => {
+  requireSameOrigin(request);
+  reply.header('Set-Cookie', adminAuth.clearSessionCookie());
+  return { authenticated: false };
+});
+
 app.get('/api/runs', async request => {
   const query = request.query as any;
   const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 100);
@@ -91,8 +141,15 @@ app.get('/api/runs/:id', async request => {
   if (!run) fail(404, '生成记录不存在。');
   return run;
 });
-app.delete('/api/runs/:id', async () => {
-  fail(403, '历史记录暂不允许删除。');
+app.delete('/api/runs/:id', async request => {
+  requireSameOrigin(request);
+  requireAdmin(request);
+  const id = String((request.params as any).id);
+  const run = store.getRun(id);
+  if (!run) fail(404, '生成记录不存在。');
+  if (run.status === 'running') fail(409, '生成中的记录不能删除。');
+  if (!store.deleteRun(id)) fail(404, '生成记录不存在。');
+  return { ok: true };
 });
 app.get('/api/runs/:id/download', async (request, reply) => {
   const run = store.getRun(String((request.params as any).id));

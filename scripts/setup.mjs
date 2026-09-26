@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 
 try {
@@ -5,6 +6,7 @@ try {
     'HOST=127.0.0.1',
     'PORT=3200',
     'DATA_DIR=./data',
+    `APP_KEY=${randomBytes(32).toString('hex')}`,
     '',
   ].join('\n'), { flag: 'wx', mode: 0o600 });
   console.log('已生成 .env。模型配置保存在各自浏览器，服务器仅保存历史记录。');

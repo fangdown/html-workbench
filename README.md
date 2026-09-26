@@ -51,6 +51,19 @@ docker compose up -d --build
 
 `data` 通过目录挂载持久化；更新时保留该目录和服务器 `.env`。
 
+### 管理员删除
+
+管理员使用服务器密码登录后可以删除已结束的历史记录，生成中的记录不能删除。先生成密码哈希：
+
+```sh
+read -s ADMIN_PASSWORD
+export ADMIN_PASSWORD
+npm run admin:hash
+unset ADMIN_PASSWORD
+```
+
+将输出的 `ADMIN_PASSWORD_HASH=...` 写入服务器 `.env`，并确保 `APP_KEY` 是 64 位十六进制随机值。重建容器后，页面历史记录区域会显示“管理员登录”。
+
 ## 接口
 
 每个浏览器使用自己的模型配置，地址、Key、模型名称保存在该网站的 localStorage 中，不与其他浏览器共享。同一浏览器配置文件、同一网站地址下的标签页共用本地配置；换浏览器、换网站地址或清除网站数据后需要重新填写。

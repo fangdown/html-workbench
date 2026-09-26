@@ -96,6 +96,8 @@ test('迁移保留旧历史，新增记录无需共享模型且只保存公开�
     store.close(); store = new Store(path);
     assert.equal(store.getRun('legacy-run')?.html, html);
     assert.equal(store.getRun(run.id)?.status, 'interrupted');
+    assert.equal(store.deleteRun(run.id), true);
+    assert.equal(store.getRun(run.id), null);
   } finally {
     legacy?.close(); store?.close();
     rmSync(directory, { recursive: true });
