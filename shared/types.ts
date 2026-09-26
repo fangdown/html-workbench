@@ -1,4 +1,4 @@
-export type Protocol = 'chat-completions' | 'responses';
+export type Protocol = 'chat-completions' | 'responses' | 'anthropic-messages';
 export type RunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted';
 export const MODEL_GROUPS = ['GRT-PRO稳定', 'GPT-企业级', 'GPT-官key', 'GPT-福利', '自定义'] as const;
 export type ModelGroup = typeof MODEL_GROUPS[number];

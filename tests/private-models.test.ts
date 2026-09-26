@@ -53,6 +53,12 @@ test('缺少本次配置不能回退共享 Key，公开快照不包含私有配�
   assert.equal(JSON.stringify(snapshot).includes(config.baseUrl), false);
 });
 
+test('支持 Claude 原生 Messages 协议配置', () => {
+  const parsed = parseGenerationModel({ ...config, protocol: 'anthropic-messages' });
+  assert.equal(parsed.protocol, 'anthropic-messages');
+  assert.equal(publicModelSnapshot(parsed).protocol, 'anthropic-messages');
+});
+
 test('迁移保留旧历史，新增记录无需共享模型且只保存公开快照', () => {
   const directory = mkdtempSync(join(tmpdir(), 'ai-zhili-private-models-'));
   const path = join(directory, 'history.sqlite');

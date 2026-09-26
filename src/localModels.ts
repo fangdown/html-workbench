@@ -10,7 +10,7 @@ function read(storage: Pick<Storage, 'getItem'>): BrowserModelConfig[] {
     && typeof item.name === 'string' && typeof item.baseUrl === 'string' && typeof item.model === 'string'
     && typeof item.apiKey === 'string' && typeof item.stream === 'boolean' && typeof item.isDefault === 'boolean'
     && (item.group === undefined || MODEL_GROUPS.includes(item.group))
-    && ['chat-completions', 'responses'].includes(item.protocol))) {
+    && ['chat-completions', 'responses', 'anthropic-messages'].includes(item.protocol))) {
     throw new Error('本地模型配置无法读取，未覆盖原数据。');
   }
   return value.map(item => ({ ...item, group: item.group ?? MODEL_GROUPS[0], hasKey: Boolean(item.apiKey), keyMask: item.apiKey ? '••••••••' : '未设置' }));
@@ -33,7 +33,7 @@ export function saveLocalModel(input: ModelInput, id: string | null, storage: Pi
   if (!model || model.length > 180) throw new Error('请输入模型名称，最多 180 个字符。');
   if (!apiKey || apiKey.length > 10_000 || /[\r\n]/.test(apiKey)) throw new Error('请输入有效的 API Key。');
   if (!MODEL_GROUPS.includes(input.group)) throw new Error('模型分组不受支持。');
-  if (!['chat-completions', 'responses'].includes(input.protocol)) throw new Error('接口协议不受支持。');
+  if (!['chat-completions', 'responses', 'anthropic-messages'].includes(input.protocol)) throw new Error('接口协议不受支持。');
   let url: URL;
   try { url = new URL(baseUrl); } catch { throw new Error('请输入有效的 Base URL。'); }
   if (baseUrl.length > 500 || !['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {

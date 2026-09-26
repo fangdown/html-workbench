@@ -20,7 +20,7 @@ export function parseGenerationModel(value: unknown): GenerationModel {
   }
   if (url.protocol === 'http:' && process.env.ALLOW_LOCAL_MODEL !== 'true') throw new AppError(400, '模型地址必须使用 HTTPS。');
   if (/[\r\n]/.test(apiKey)) throw new AppError(400, 'API Key 无效。');
-  if (input.protocol !== 'chat-completions' && input.protocol !== 'responses') throw new AppError(400, '接口协议不受支持。');
+  if (input.protocol !== 'chat-completions' && input.protocol !== 'responses' && input.protocol !== 'anthropic-messages') throw new AppError(400, '接口协议不受支持。');
   if (!MODEL_GROUPS.includes(input.group as typeof MODEL_GROUPS[number])) throw new AppError(400, '模型分组不受支持。');
   if (typeof input.stream !== 'boolean') throw new AppError(400, '流式输出选项无效。');
   return { group: input.group as typeof MODEL_GROUPS[number], baseUrl, apiKey, model, protocol: input.protocol, stream: input.stream };

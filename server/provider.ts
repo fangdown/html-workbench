@@ -41,7 +41,7 @@ export async function validateEndpoint(baseUrl: string) {
 }
 
 function endpoint(base: URL, protocol: Protocol) {
-  const suffix = protocol === 'responses' ? '/responses' : '/chat/completions';
+  const suffix = protocol === 'responses' ? '/responses' : protocol === 'anthropic-messages' ? '/messages' : '/chat/completions';
   const path = base.pathname.replace(/\/+$/, '');
   if (path.endsWith(suffix)) return base;
   base.pathname = `${path}${suffix}`;
@@ -53,11 +53,19 @@ function parseUsage(value: any): Usage | null {
   if (!usage) return null;
   const inputTokens = usage.prompt_tokens ?? usage.input_tokens;
   const outputTokens = usage.completion_tokens ?? usage.output_tokens;
-  const totalTokens = usage.total_tokens ?? usage.total_tokens;
+  const totalTokens = usage.total_tokens ?? (typeof inputTokens === 'number' && typeof outputTokens === 'number' ? inputTokens + outputTokens : undefined);
   return { inputTokens, outputTokens, totalTokens };
 }
 
+function mergeUsage(current: Usage | null, next: Usage | null) {
+  if (!next) return current;
+  return { inputTokens: next.inputTokens ?? current?.inputTokens, outputTokens: next.outputTokens ?? current?.outputTokens, totalTokens: next.totalTokens ?? current?.totalTokens };
+}
+
 function responseText(value: any, protocol: Protocol) {
+  if (protocol === 'anthropic-messages') {
+    return Array.isArray(value?.content) ? value.content.filter((part: any) => part?.type === 'text').map((part: any) => part.text ?? '').join('') : '';
+  }
   if (protocol === 'responses') {
     if (typeof value?.output_text === 'string') return value.output_text;
     const output = value?.output;
@@ -77,10 +85,12 @@ async function readSse(response: Response, protocol: Protocol, onDelta: (text: s
     if (!data || data === '[DONE]') return;
     let value: any;
     try { value = JSON.parse(data); } catch { return; }
-    usage = parseUsage(value) ?? usage;
+    usage = mergeUsage(usage, parseUsage(value));
     const delta = protocol === 'responses'
       ? (value.type === 'response.output_text.delta' ? value.delta : '')
-      : (value.choices?.[0]?.delta?.content ?? '');
+      : protocol === 'anthropic-messages'
+        ? (value.type === 'content_block_delta' && value.delta?.type === 'text_delta' ? value.delta.text : '')
+        : (value.choices?.[0]?.delta?.content ?? '');
     if (typeof delta === 'string' && delta) { output += delta; onDelta(delta); }
   };
   while (true) {
@@ -102,8 +112,16 @@ export async function generate(options: ProviderOptions): Promise<ProviderResult
   const config = options.modelConfig;
   const base = await validateEndpoint(config.baseUrl);
   const url = endpoint(base, config.protocol);
-  const headers = { authorization: `Bearer ${config.apiKey}`, 'content-type': 'application/json', accept: config.stream ? 'text/event-stream' : 'application/json' };
-  const body = config.protocol === 'responses' ? {
+  const headers: Record<string, string> = config.protocol === 'anthropic-messages'
+    ? { 'x-api-key': config.apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', accept: config.stream ? 'text/event-stream' : 'application/json' }
+    : { authorization: `Bearer ${config.apiKey}`, 'content-type': 'application/json', accept: config.stream ? 'text/event-stream' : 'application/json' };
+  const body = config.protocol === 'anthropic-messages' ? {
+    model: config.model,
+    max_tokens: 32_768,
+    system: options.constraint,
+    messages: [{ role: 'user', content: options.prompt }],
+    stream: config.stream,
+  } : config.protocol === 'responses' ? {
     model: config.model,
     input: [
       { role: 'system', content: [{ type: 'input_text', text: options.constraint }] },
