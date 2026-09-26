@@ -15,7 +15,7 @@ function browserStorage() {
 }
 
 const config: ModelInput = {
-  name: '本机配置', baseUrl: 'https://provider.example/v1', model: 'example-model',
+  name: '本机配置', group: 'GRT-PRO稳定', baseUrl: 'https://provider.example/v1', model: 'example-model',
   protocol: 'chat-completions', stream: true, isDefault: true, apiKey: 'TEST_ONLY_FAKE_API_KEY',
 };
 
@@ -35,8 +35,10 @@ test('不同浏览器的模型配置相互隔离，编辑留空保留 Key', () =
 
 test('改名后仍可读取旧浏览器模型配置', () => {
   const storage = browserStorage();
-  storage.setItem('html-workbench.models.v1', JSON.stringify([{ ...config, id: 'legacy', hasKey: true, keyMask: '••••••••', createdAt: '2026-09-26', updatedAt: '2026-09-26' }]));
+  const { group: _group, ...legacyConfig } = config;
+  storage.setItem('html-workbench.models.v1', JSON.stringify([{ ...legacyConfig, id: 'legacy', hasKey: true, keyMask: '••••••••', createdAt: '2026-09-26', updatedAt: '2026-09-26' }]));
   assert.equal(readLocalModels(storage)[0].name, config.name);
+  assert.equal(readLocalModels(storage)[0].group, 'GRT-PRO稳定');
 });
 
 test('缺少本次配置不能回退共享 Key，公开快照不包含私有配置', () => {
