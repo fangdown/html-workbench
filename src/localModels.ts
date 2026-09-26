@@ -1,9 +1,10 @@
 import type { BrowserModelConfig, ModelInput } from '../shared/types';
 
-export const MODEL_STORAGE_KEY = 'html-workbench.models.v1';
+export const MODEL_STORAGE_KEY = 'ai-zhili.models.v1';
+const LEGACY_MODEL_STORAGE_KEY = 'html-workbench.models.v1';
 
 function read(storage: Pick<Storage, 'getItem'>): BrowserModelConfig[] {
-  const raw = storage.getItem(MODEL_STORAGE_KEY);
+  const raw = storage.getItem(MODEL_STORAGE_KEY) ?? storage.getItem(LEGACY_MODEL_STORAGE_KEY);
   if (raw === null) return [];
   const value: unknown = JSON.parse(raw);
   if (!Array.isArray(value) || !value.every(item => item && typeof item.id === 'string'

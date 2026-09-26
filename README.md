@@ -1,4 +1,4 @@
-# 一页 · HTML 生成工作台
+# AI Zhili · HTML 生成工作台
 
 单项目、同域部署的 HTML 生成工作台：配置模型后输入提示词，生成结果会实时流入历史记录，并在隔离 iframe 中预览。
 
@@ -35,7 +35,7 @@ docker compose up -d --build
 ### us-38 部署
 
 - 访问地址：`https://zhili.opens.chat`。
-- 项目目录：`/opt/html-workbench`；历史数据库：`/opt/html-workbench/data/workbench.sqlite`。
+- 项目目录：`/opt/ai-zhili`；历史数据库：`/opt/ai-zhili/data/workbench.sqlite`。
 - Docker 仅绑定 `127.0.0.1:3200`，由宿主机 Nginx 提供 HTTPS 和 SSE 转发。
 - Nginx 配置：`/etc/nginx/sites-available/zhili.opens.chat`。
 - TLS 证书：`/etc/letsencrypt/live/zhili.opens.chat/`，由 Certbot 定时续期，续期后自动重载 Nginx。
@@ -44,7 +44,7 @@ docker compose up -d --build
 在服务器更新：
 
 ```sh
-cd /opt/html-workbench
+cd /opt/ai-zhili
 git pull --ff-only
 docker compose up -d --build
 ```

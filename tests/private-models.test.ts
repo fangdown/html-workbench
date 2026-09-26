@@ -33,6 +33,12 @@ test('不同浏览器的模型配置相互隔离，编辑留空保留 Key', () =
   assert.equal(readLocalModels(second)[0].name, '另一浏览器');
 });
 
+test('改名后仍可读取旧浏览器模型配置', () => {
+  const storage = browserStorage();
+  storage.setItem('html-workbench.models.v1', JSON.stringify([{ ...config, id: 'legacy', hasKey: true, keyMask: '••••••••', createdAt: '2026-09-26', updatedAt: '2026-09-26' }]));
+  assert.equal(readLocalModels(storage)[0].name, config.name);
+});
+
 test('缺少本次配置不能回退共享 Key，公开快照不包含私有配置', () => {
   assert.throws(() => parseGenerationModel(undefined));
   assert.throws(() => parseGenerationModel({ ...config, apiKey: '' }));
@@ -45,7 +51,7 @@ test('缺少本次配置不能回退共享 Key，公开快照不包含私有配�
 });
 
 test('迁移保留旧历史，新增记录无需共享模型且只保存公开快照', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'html-workbench-private-models-'));
+  const directory = mkdtempSync(join(tmpdir(), 'ai-zhili-private-models-'));
   const path = join(directory, 'history.sqlite');
   let legacy: DatabaseSync | undefined;
   let store: Store | undefined;

@@ -1,5 +1,5 @@
 services:
-  html-workbench:
+  ai-zhili:
     build: .
     restart: unless-stopped
     ports:

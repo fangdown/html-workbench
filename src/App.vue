@@ -17,7 +17,8 @@ const showSettings = ref(false);
 const editingId = ref<string | null>(null);
 const savingConfig = ref(false);
 const ownRun = ref<BrowserRun | null>(null);
-const ACTIVE_RUN_STORAGE_KEY = 'html-workbench.active-run.v1';
+const ACTIVE_RUN_STORAGE_KEY = 'ai-zhili.active-run.v1';
+const LEGACY_ACTIVE_RUN_STORAGE_KEY = 'html-workbench.active-run.v1';
 let eventSource: EventSource | null = null;
 let noticeTimer: number | undefined;
 
@@ -53,13 +54,23 @@ function rememberRun(run: BrowserRun | null) {
   ownRun.value = run;
   try {
     if (run) localStorage.setItem(ACTIVE_RUN_STORAGE_KEY, JSON.stringify(run));
-    else localStorage.removeItem(ACTIVE_RUN_STORAGE_KEY);
+    else {
+      localStorage.removeItem(ACTIVE_RUN_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_ACTIVE_RUN_STORAGE_KEY);
+    }
   } catch { showNotice('浏览器未能保存任务状态，刷新后请在历史记录中查看结果。', 'info'); }
 }
 function restoreOwnRun() {
   try {
-    const saved = JSON.parse(localStorage.getItem(ACTIVE_RUN_STORAGE_KEY) ?? 'null');
-    if (saved && typeof saved.id === 'string' && typeof saved.requestId === 'string') ownRun.value = saved;
+    const current = localStorage.getItem(ACTIVE_RUN_STORAGE_KEY);
+    const raw = current ?? localStorage.getItem(LEGACY_ACTIVE_RUN_STORAGE_KEY);
+    const saved = JSON.parse(raw ?? 'null');
+    if (saved && typeof saved.id === 'string' && typeof saved.requestId === 'string') {
+      ownRun.value = saved;
+      if (current === null) {
+        try { localStorage.setItem(ACTIVE_RUN_STORAGE_KEY, JSON.stringify(saved)); } catch { /* Keep using the legacy value. */ }
+      }
+    }
   } catch { ownRun.value = null; }
 }
 async function openRun(id: string) {
