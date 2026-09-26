@@ -37,7 +37,7 @@ docker compose up -d --build
 - 访问地址：`https://zhili.opens.chat`。
 - 项目目录：`/opt/ai-zhili`；历史数据库：`/opt/ai-zhili/data/workbench.sqlite`。
 - Docker 仅绑定 `127.0.0.1:3200`，由宿主机 Nginx 提供 HTTPS 和 SSE 转发。
-- Nginx 配置：`/etc/nginx/sites-available/zhili.opens.chat`。
+- Nginx 模板：`deploy/nginx/zhili.opens.chat.conf`，安装到 `/etc/nginx/sites-available/zhili.opens.chat`。
 - TLS 证书：`/etc/letsencrypt/live/zhili.opens.chat/`，由 Certbot 定时续期，续期后自动重载 Nginx。
 - 模型配置仍由每个浏览器保存，不随服务器部署或更新上传。
 
