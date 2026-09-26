@@ -1,10 +1,9 @@
 import { MODEL_GROUPS, type BrowserModelConfig, type ModelInput } from '../shared/types';
 
 export const MODEL_STORAGE_KEY = 'ai-zhili.models.v1';
-const LEGACY_MODEL_STORAGE_KEY = 'html-workbench.models.v1';
 
 function read(storage: Pick<Storage, 'getItem'>): BrowserModelConfig[] {
-  const raw = storage.getItem(MODEL_STORAGE_KEY) ?? storage.getItem(LEGACY_MODEL_STORAGE_KEY);
+  const raw = storage.getItem(MODEL_STORAGE_KEY);
   if (raw === null) return [];
   const value: unknown = JSON.parse(raw);
   if (!Array.isArray(value) || !value.every(item => item && typeof item.id === 'string'
@@ -26,11 +25,11 @@ export function saveLocalModel(input: ModelInput, id: string | null, storage: Pi
   const configs = readLocalModels(storage);
   const existing = id ? configs.find(item => item.id === id) : undefined;
   if (id && !existing) throw new Error('本地模型配置不存在，请重新选择。');
-  const name = input.name.trim();
+  const name = input.name?.trim() || input.group;
   const model = input.model.trim();
   const baseUrl = input.baseUrl.trim();
   const apiKey = input.apiKey?.trim() || existing?.apiKey || '';
-  if (!name || name.length > 80) throw new Error('请输入配置名称，最多 80 个字符。');
+  if (name.length > 80) throw new Error('模型分组名称过长。');
   if (!model || model.length > 180) throw new Error('请输入模型名称，最多 180 个字符。');
   if (!apiKey || apiKey.length > 10_000 || /[\r\n]/.test(apiKey)) throw new Error('请输入有效的 API Key。');
   if (!MODEL_GROUPS.includes(input.group)) throw new Error('模型分组不受支持。');

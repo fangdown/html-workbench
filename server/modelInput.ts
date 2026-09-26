@@ -1,4 +1,4 @@
-import type { GenerationModel, ModelSnapshot } from '../shared/types.js';
+import { MODEL_GROUPS, type GenerationModel, type ModelSnapshot } from '../shared/types.js';
 import { RUN_TIMEOUT_MS } from '../shared/types.js';
 import { AppError } from './errors.js';
 
@@ -21,10 +21,11 @@ export function parseGenerationModel(value: unknown): GenerationModel {
   if (url.protocol === 'http:' && process.env.ALLOW_LOCAL_MODEL !== 'true') throw new AppError(400, '模型地址必须使用 HTTPS。');
   if (/[\r\n]/.test(apiKey)) throw new AppError(400, 'API Key 无效。');
   if (input.protocol !== 'chat-completions' && input.protocol !== 'responses') throw new AppError(400, '接口协议不受支持。');
+  if (!MODEL_GROUPS.includes(input.group as typeof MODEL_GROUPS[number])) throw new AppError(400, '模型分组不受支持。');
   if (typeof input.stream !== 'boolean') throw new AppError(400, '流式输出选项无效。');
-  return { baseUrl, apiKey, model, protocol: input.protocol, stream: input.stream };
+  return { group: input.group as typeof MODEL_GROUPS[number], baseUrl, apiKey, model, protocol: input.protocol, stream: input.stream };
 }
 
 export function publicModelSnapshot(config: GenerationModel): ModelSnapshot {
-  return { model: config.model, protocol: config.protocol, stream: config.stream, timeoutMs: RUN_TIMEOUT_MS };
+  return { group: config.group, model: config.model, protocol: config.protocol, stream: config.stream, timeoutMs: RUN_TIMEOUT_MS };
 }

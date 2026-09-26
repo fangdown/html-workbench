@@ -27,18 +27,19 @@ test('不同浏览器的模型配置相互隔离，编辑留空保留 Key', () =
   assert.deepEqual(readLocalModels(second), []);
   const edited = saveLocalModel({ ...config, name: '新名称', apiKey: '' }, saved.id, first);
   assert.equal(edited.apiKey, config.apiKey);
+  saveLocalModel({ ...config, group: 'GPT-福利', name: undefined }, null, first);
+  assert.equal(readLocalModels(first).length, 2);
   saveLocalModel({ ...config, name: '另一浏览器' }, null, second);
   deleteLocalModel(saved.id, first);
-  assert.deepEqual(readLocalModels(first), []);
+  assert.equal(readLocalModels(first).length, 1);
   assert.equal(readLocalModels(second)[0].name, '另一浏览器');
 });
 
-test('改名后仍可读取旧浏览器模型配置', () => {
+test('不再读取旧浏览器模型配置', () => {
   const storage = browserStorage();
   const { group: _group, ...legacyConfig } = config;
   storage.setItem('html-workbench.models.v1', JSON.stringify([{ ...legacyConfig, id: 'legacy', hasKey: true, keyMask: '••••••••', createdAt: '2026-09-26', updatedAt: '2026-09-26' }]));
-  assert.equal(readLocalModels(storage)[0].name, config.name);
-  assert.equal(readLocalModels(storage)[0].group, 'GRT-PRO稳定');
+  assert.deepEqual(readLocalModels(storage), []);
 });
 
 test('缺少本次配置不能回退共享 Key，公开快照不包含私有配置', () => {
@@ -47,7 +48,7 @@ test('缺少本次配置不能回退共享 Key，公开快照不包含私有配�
   assert.throws(() => parseGenerationModel({ ...config, baseUrl: 'https://provider.example/v1?key=TEST_ONLY_FAKE_API_KEY' }));
   const parsed = parseGenerationModel(config);
   const snapshot = publicModelSnapshot(parsed);
-  assert.deepEqual(Object.keys(snapshot).sort(), ['model', 'protocol', 'stream', 'timeoutMs']);
+  assert.deepEqual(Object.keys(snapshot).sort(), ['group', 'model', 'protocol', 'stream', 'timeoutMs']);
   assert.equal(JSON.stringify(snapshot).includes(config.apiKey!), false);
   assert.equal(JSON.stringify(snapshot).includes(config.baseUrl), false);
 });

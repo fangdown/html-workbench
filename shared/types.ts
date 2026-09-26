@@ -4,7 +4,7 @@ export const MODEL_GROUPS = ['GRT-PRO稳定', 'GPT-企业级', 'GPT-官key', 'GP
 export type ModelGroup = typeof MODEL_GROUPS[number];
 
 export interface ModelInput {
-  name: string;
+  name?: string;
   group: ModelGroup;
   baseUrl: string;
   model: string;
@@ -27,6 +27,7 @@ export interface BrowserModelConfig extends ModelConfig {
 }
 
 export interface GenerationModel {
+  group: ModelGroup;
   baseUrl: string;
   apiKey: string;
   model: string;
@@ -35,6 +36,7 @@ export interface GenerationModel {
 }
 
 export interface ModelSnapshot {
+  group: ModelGroup;
   model: string;
   protocol: Protocol;
   stream: boolean;

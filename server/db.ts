@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { ModelSnapshot, RunDetail, RunPage, RunStatus, RunSummary, Usage } from '../shared/types.js';
+import { MODEL_GROUPS, type ModelSnapshot, type RunDetail, type RunPage, type RunStatus, type RunSummary, type Usage } from '../shared/types.js';
 
 type DbRow = Record<string, unknown>;
 
@@ -109,7 +109,7 @@ export class Store {
   private toRun(row: DbRow, detail: false): RunSummary;
   private toRun(row: DbRow, detail: boolean): RunDetail | RunSummary {
     const saved = jsonParse<ModelSnapshot>(row.snapshot_json, {} as ModelSnapshot);
-    const snapshot: ModelSnapshot = { model: saved.model, protocol: saved.protocol, stream: saved.stream, timeoutMs: saved.timeoutMs };
+    const snapshot: ModelSnapshot = { group: saved.group ?? MODEL_GROUPS[0], model: saved.model, protocol: saved.protocol, stream: saved.stream, timeoutMs: saved.timeoutMs };
     const base = {
       id: String(row.id), prompt: String(row.prompt), snapshot, status: row.status as RunStatus,
       createdAt: String(row.created_at), completedAt: row.completed_at ? String(row.completed_at) : null,
